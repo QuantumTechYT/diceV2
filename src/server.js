@@ -40,6 +40,11 @@ class DictionaryProxy {
 class URLProxy {
     async fetch(url) {
         try {
+            // Add default protocol if missing
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                url = 'https://' + url;
+            }
+            
             const response = await bareServer.fetch(url);
             return response;
         } catch (error) {
@@ -57,14 +62,16 @@ class CombinedProxy {
     }
 
     async get(key) {
-        // Check if the key is a URL
+        // First try as URL
         try {
-            const url = new URL(key);
-            return await this.urlProxy.fetch(url.toString());
-        } catch {
-            // If not a URL, treat as a dictionary word
-            return await this.dictionary.get(key);
-        }
+            // Check if input looks like a domain
+            if (key.includes('.') && !key.includes(' ')) {
+                return await this.urlProxy.fetch(key);
+            }
+        } catch {}
+
+        // If not a URL or URL fails, try as dictionary word
+        return await this.dictionary.get(key);
     }
 }
 
@@ -74,22 +81,21 @@ const proxy = new CombinedProxy();
 // Routes
 app.get('/proxy/:key', async (req, res) => {
     const { key } = req.params;
-    console.log('Received proxy request for:', decodeURIComponent(key));
+    console.log('Received request for:', decodeURIComponent(key));
     
     const result = await proxy.get(decodeURIComponent(key));
     
     if (result === null) {
-        console.log('No result found');
         return res.status(404).json({ error: 'Not found' });
     }
 
     if (result instanceof Response) {
-        console.log('Proxying URL response');
+        // Handle URL proxy response
         const headers = Object.fromEntries(result.headers.entries());
         res.set(headers);
         result.body.pipe(res);
     } else {
-        console.log('Sending dictionary response');
+        // Handle dictionary response
         res.json(result);
     }
 });
