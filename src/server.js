@@ -74,19 +74,22 @@ const proxy = new CombinedProxy();
 // Routes
 app.get('/proxy/:key', async (req, res) => {
     const { key } = req.params;
+    console.log('Received proxy request for:', decodeURIComponent(key));
+    
     const result = await proxy.get(decodeURIComponent(key));
     
     if (result === null) {
+        console.log('No result found');
         return res.status(404).json({ error: 'Not found' });
     }
 
     if (result instanceof Response) {
-        // Handle URL proxy response
+        console.log('Proxying URL response');
         const headers = Object.fromEntries(result.headers.entries());
         res.set(headers);
         result.body.pipe(res);
     } else {
-        // Handle dictionary response
+        console.log('Sending dictionary response');
         res.json(result);
     }
 });
